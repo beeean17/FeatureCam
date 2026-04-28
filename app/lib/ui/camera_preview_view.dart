@@ -1,25 +1,37 @@
 import 'dart:math' as math;
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../camera/camera_modes.dart';
 
 class CameraPreviewView extends StatelessWidget {
-  const CameraPreviewView({super.key, required this.mode, required this.zoom});
+  const CameraPreviewView({
+    super.key,
+    required this.mode,
+    required this.controller,
+    required this.errorMessage,
+    required this.isInitializing,
+  });
 
   final CameraMode mode;
-  final double zoom;
+  final CameraController? controller;
+  final String? errorMessage;
+  final bool isInitializing;
 
   @override
   Widget build(BuildContext context) {
+    final activeController = controller;
+
     return ColoredBox(
       color: const Color(0xFF090909),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CustomPaint(
-            painter: _ViewfinderPainter(mode: mode, zoom: zoom),
-          ),
+          if (activeController != null && activeController.value.isInitialized)
+            _CameraPreviewFill(controller: activeController)
+          else
+            CustomPaint(painter: _ViewfinderPainter(mode: mode)),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -35,17 +47,85 @@ class CameraPreviewView extends StatelessWidget {
               ),
             ),
           ),
+          if (activeController == null || !activeController.value.isInitialized)
+            _CameraStateMessage(
+              message:
+                  errorMessage ??
+                  (isInitializing ? '카메라 준비 중' : '카메라를 사용할 수 없습니다'),
+            ),
         ],
       ),
     );
   }
 }
 
+class _CameraPreviewFill extends StatelessWidget {
+  const _CameraPreviewFill({required this.controller});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) {
+      return CameraPreview(controller);
+    }
+
+    final orientation = MediaQuery.orientationOf(context);
+    final previewWidth = orientation == Orientation.portrait
+        ? previewSize.height
+        : previewSize.width;
+    final previewHeight = orientation == Orientation.portrait
+        ? previewSize.width
+        : previewSize.height;
+
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: previewWidth,
+          height: previewHeight,
+          child: CameraPreview(controller),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraStateMessage extends StatelessWidget {
+  const _CameraStateMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.38),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ViewfinderPainter extends CustomPainter {
-  const _ViewfinderPainter({required this.mode, required this.zoom});
+  const _ViewfinderPainter({required this.mode});
 
   final CameraMode mode;
-  final double zoom;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -142,6 +222,6 @@ class _ViewfinderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ViewfinderPainter oldDelegate) {
-    return oldDelegate.mode != mode || oldDelegate.zoom != zoom;
+    return oldDelegate.mode != mode;
   }
 }

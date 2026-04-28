@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -14,6 +15,9 @@ class BottomCaptureBar extends StatelessWidget {
     required this.onShutterPressed,
     required this.onGalleryPressed,
     required this.onSwitchCameraPressed,
+    required this.lastCapture,
+    this.isLandscape = false,
+    this.contentQuarterTurns = 0,
   });
 
   final CameraMode mode;
@@ -21,9 +25,58 @@ class BottomCaptureBar extends StatelessWidget {
   final VoidCallback onShutterPressed;
   final VoidCallback onGalleryPressed;
   final VoidCallback onSwitchCameraPressed;
+  final File? lastCapture;
+  final bool isLandscape;
+  final int contentQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
+    if (isLandscape) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: FeatureCamColors.surface,
+                border: Border(
+                  left: BorderSide(color: FeatureCamColors.strokeSubtle),
+                ),
+              ),
+              child: SafeArea(
+                left: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 24, 22, 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _ThumbnailButton(
+                        file: lastCapture,
+                        onPressed: onGalleryPressed,
+                        quarterTurns: contentQuarterTurns,
+                      ),
+                      ShutterButton(
+                        mode: mode,
+                        isRecording: isRecording,
+                        onPressed: onShutterPressed,
+                      ),
+                      _RoundIconButton(
+                        icon: Icons.cameraswitch_rounded,
+                        onPressed: isRecording ? null : onSwitchCameraPressed,
+                        quarterTurns: contentQuarterTurns,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Align(
       alignment: Alignment.bottomCenter,
       child: ClipRect(
@@ -44,7 +97,11 @@ class BottomCaptureBar extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _ThumbnailButton(onPressed: onGalleryPressed),
+                    _ThumbnailButton(
+                      file: lastCapture,
+                      onPressed: onGalleryPressed,
+                      quarterTurns: contentQuarterTurns,
+                    ),
                     ShutterButton(
                       mode: mode,
                       isRecording: isRecording,
@@ -53,6 +110,7 @@ class BottomCaptureBar extends StatelessWidget {
                     _RoundIconButton(
                       icon: Icons.cameraswitch_rounded,
                       onPressed: isRecording ? null : onSwitchCameraPressed,
+                      quarterTurns: contentQuarterTurns,
                     ),
                   ],
                 ),
@@ -153,9 +211,15 @@ class _ShutterButtonState extends State<ShutterButton> {
 }
 
 class _ThumbnailButton extends StatelessWidget {
-  const _ThumbnailButton({required this.onPressed});
+  const _ThumbnailButton({
+    required this.file,
+    required this.onPressed,
+    required this.quarterTurns,
+  });
 
+  final File? file;
   final VoidCallback onPressed;
+  final int quarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -169,17 +233,29 @@ class _ThumbnailButton extends StatelessWidget {
           border: Border.all(color: FeatureCamColors.strokeSubtle),
         ),
         clipBehavior: Clip.antiAlias,
-        child: CustomPaint(painter: _ThumbnailPainter()),
+        child: AnimatedRotation(
+          turns: quarterTurns / 4,
+          duration: CameraMotion.controlShift,
+          curve: CameraMotion.cameraEaseInOut,
+          child: file == null
+              ? CustomPaint(painter: _ThumbnailPainter())
+              : Image.file(file!, fit: BoxFit.cover),
+        ),
       ),
     );
   }
 }
 
 class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onPressed});
+  const _RoundIconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.quarterTurns,
+  });
 
   final IconData icon;
   final VoidCallback? onPressed;
+  final int quarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +272,12 @@ class _RoundIconButton extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(color: FeatureCamColors.strokeSubtle),
           ),
-          child: Icon(icon, color: FeatureCamColors.white, size: 28),
+          child: AnimatedRotation(
+            turns: quarterTurns / 4,
+            duration: CameraMotion.controlShift,
+            curve: CameraMotion.cameraEaseInOut,
+            child: Icon(icon, color: FeatureCamColors.white, size: 28),
+          ),
         ),
       ),
     );

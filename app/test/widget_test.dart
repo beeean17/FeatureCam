@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:feature_cam/app/feature_cam_app.dart';
 
 void main() {
   testWidgets('FeatureCam opens camera shell', (WidgetTester tester) async {
+    await _setPortraitSurface(tester);
     await tester.pumpWidget(const FeatureCamApp());
 
     expect(find.text('MODE'), findsOneWidget);
@@ -17,6 +20,7 @@ void main() {
   });
 
   testWidgets('Fisheye mode shows lens guidance', (WidgetTester tester) async {
+    await _setPortraitSurface(tester);
     await tester.pumpWidget(const FeatureCamApp());
 
     await tester.tap(find.text('MODE'));
@@ -25,5 +29,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('촬영 후 원 안쪽이 Fisheye로 처리됩니다'), findsOneWidget);
+  });
+}
+
+Future<void> _setPortraitSurface(WidgetTester tester) async {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = const Size(390, 844);
+  addTearDown(() {
+    tester.view.resetDevicePixelRatio();
+    tester.view.resetPhysicalSize();
   });
 }

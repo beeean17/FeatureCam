@@ -17,4 +17,5 @@ class CameraMotion {
   static const captureFlash = Duration(milliseconds: 120);
   static const panoramaGuide = Duration(milliseconds: 260);
   static const lensSettle = Duration(milliseconds: 180);
+  static const focusIndicator = Duration(milliseconds: 720);
 }

@@ -10,10 +10,9 @@
 - UI는 검은색 반투명 바와 blur를 사용해 카메라 프리뷰를 가리지 않는다.
 - 강조 색상은 amber/yellow 계열 `#FFB800`을 사용한다.
 - 상단에는 설정, 모드 진입, 플래시 상태를 배치한다.
-- 상단 아래에는 `PHOTO`, `VIDEO`, `FISHEYE`, `PANORAMA` 모드 바를 둔다.
+- `MODE` 버튼을 누르면 `PHOTO`, `VIDEO`, `FISHEYE`, `PANORAMA` 모드 바가 슬라이드되어 나온다.
 - 하단에는 갤러리 미리보기, 셔터, 카메라 전환을 둔다.
 - 셔터는 화면 하단 중앙에 가장 크게 배치한다.
-- 렌즈 배율 선택은 프리뷰 하단, 셔터 위에 배치한다.
 
 ## 주요 UI 구성
 
@@ -33,22 +32,13 @@
 
 ### Modes Bar
 
-- 위치: top app bar 아래
+- 위치: `MODE` 버튼 아래에 접힌 상태로 대기하고, 버튼을 누르면 아래로 슬라이드된다.
 - 항목:
   - `PHOTO`
   - `VIDEO`
   - `FISHEYE`
   - `PANORAMA`
 - 선택된 모드는 amber 색상과 하단 underline으로 표시한다.
-
-### Lens Switcher
-
-- 위치: 셔터 버튼 위
-- 항목:
-  - `0.5`
-  - `1x`
-  - `2x`
-- 선택된 렌즈는 amber border와 glow로 강조한다.
 
 ### Bottom Controls
 
@@ -228,17 +218,6 @@ On mode change
 ```
 
 The camera preview should not jump during mode changes. Only controls and overlays change.
-
-### Lens Switcher
-
-```txt
-On lens tap
-  selected item scale: 1.00 -> 1.08 -> 1.00
-  selected border opacity: 0 -> 1
-  glow opacity: 0 -> 0.35
-  duration: 180ms
-  curve: cameraSpring
-```
 
 ### Top Controls
 
@@ -460,7 +439,6 @@ CameraScreen
   FisheyeLensOverlay
   PanoramaGuideOverlay
   PanoramaCaptureStrip
-  LensSwitcher
   BottomCaptureBar
   ProcessingOverlay
 ```
@@ -609,15 +587,6 @@ MODE
 <span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-tighter group-hover:text-white transition-colors">PANORAMA</span>
 </a>
 </div>
-<!-- Main Content Area (Spacer to push controls down) -->
-<main class="flex-1 relative z-10 flex flex-col justify-end pb-[140px]">
-<!-- Lens Switcher -->
-<div class="flex justify-center items-center gap-4 mb-8">
-<button class="w-10 h-10 rounded-full bg-[#1A1A1A]/80 backdrop-blur-md border border-[#222222] text-white font-data-mono text-data-mono flex items-center justify-center transition-colors hover:bg-[#353534]/80">0.5</button>
-<button class="w-12 h-12 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500 text-amber-500 font-data-mono text-data-mono flex items-center justify-center shadow-[0_0_15px_rgba(255,184,0,0.3)]">1x</button>
-<button class="w-10 h-10 rounded-full bg-[#1A1A1A]/80 backdrop-blur-md border border-[#222222] text-white font-data-mono text-data-mono flex items-center justify-center transition-colors hover:bg-[#353534]/80">2x</button>
-</div>
-</main>
 <!-- BottomNavBar -->
 <nav class="fixed bottom-0 left-0 w-full z-50 flex justify-between items-center px-8 pb-10 pt-6 bg-[#0A0A0A]/90 backdrop-blur-xl border-t border-[#222222] rounded-t-3xl">
 <!-- Secondary Action Left (Gallery Preview) -->

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -8,9 +9,14 @@ import 'camera_motion.dart';
 import 'camera_theme.dart';
 
 class PanoramaGuideOverlay extends StatelessWidget {
-  const PanoramaGuideOverlay({super.key, required this.state});
+  const PanoramaGuideOverlay({
+    super.key,
+    required this.state,
+    required this.guideImage,
+  });
 
   final PanoramaCaptureState state;
+  final File? guideImage;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +41,7 @@ class PanoramaGuideOverlay extends StatelessWidget {
                 child: AnimatedOpacity(
                   duration: CameraMotion.panoramaGuide,
                   opacity: state.guideVisible ? 1 : 0,
-                  child: const _PreviousFrameGuide(),
+                  child: _PreviousFrameGuide(image: guideImage),
                 ),
               ),
               if (state.guideVisible)
@@ -152,11 +158,32 @@ class _ProgressPill extends StatelessWidget {
 }
 
 class _PreviousFrameGuide extends StatelessWidget {
-  const _PreviousFrameGuide();
+  const _PreviousFrameGuide({required this.image});
+
+  final File? image;
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _PreviousFramePainter());
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (image != null)
+          ClipRect(
+            child: FractionallySizedBox(
+              widthFactor: 5,
+              alignment: Alignment.centerRight,
+              child: Image.file(image!, fit: BoxFit.cover),
+            ),
+          )
+        else
+          CustomPaint(painter: _PreviousFramePainter()),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: FeatureCamColors.amber.withValues(alpha: 0.22),
+          ),
+        ),
+      ],
+    );
   }
 }
 

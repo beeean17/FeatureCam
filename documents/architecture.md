@@ -71,17 +71,18 @@ FeatureCam/
         panorama_capture_strip.dart
         processing_overlay.dart
 
-  python_backend/
-    app.py
+  app/android/app/src/main/python/
+    feature_processor.py
     processors/
       fisheye.py
       image_processor.py
       panorama_stitcher.py
       video_processor.py
-    storage/
-      input/
-      output/
-    requirements.txt
+
+  python_backend/
+    processors/
+      ...
+    # Android 내장 Python과 동일한 처리 로직을 개발 머신에서 검증하기 위한 reference copy
 
   documents/
     camera_app_architecture.md
@@ -100,9 +101,9 @@ Flutter는 프론트엔드 역할에 집중한다.
 - panorama용 3장 연속 촬영
 - 이전 사진의 오른쪽 20%를 프리뷰 왼쪽에 반투명 overlay로 표시
 - 모드 선택 UI
-- Python backend 호출
+- Android MethodChannel을 통한 내장 Python 처리 호출
 - 처리 중 상태 표시
-- 결과 파일 표시 및 저장
+- 결과 파일 표시 및 `DCIM/FeatureCam/` 저장
 
 ### `CameraSession`
 
@@ -141,24 +142,39 @@ Flutter camera plugin을 감싸는 카메라 기능의 단일 진입점이다.
 
 ### `ProcessingClient`
 
-Flutter와 Python backend 사이의 통신을 담당한다.
+Flutter와 Android 내장 Python 처리 엔진 사이의 통신을 담당한다.
 
 - 사진 처리 요청
 - 영상 처리 요청
 - panorama stitching 요청
 - 처리 파라미터 전달
-- 결과 파일 수신
+- 처리 결과 파일 경로 수신
 - 에러 처리
 
-### Python Backend
+### `CaptureStore`
 
-Python backend는 실제 미디어 프로세싱 엔진이다.
+촬영 및 처리 결과 파일의 저장 흐름을 관리한다.
 
+- 앱 내부 작업 파일을 생성해 preview thumbnail, panorama guide, Python 처리 입력으로 사용한다.
+- 최종 원본/처리 결과는 Android `MediaStore`를 통해 `DCIM/FeatureCam/`에 저장한다.
+- Android scoped storage 정책에 맞춰 직접 public path에 쓰지 않고 MediaStore URI로 등록한다.
+- 저장 파일명은 `yymmdd_hhmmss_code.ext` 형식이다.
+- 파일명 code는 원본 사진 `or`, fisheye `fs`, panorama `pn`, video `vd`를 사용한다.
+- 갤러리 화면은 Android 미디어 권한을 요청한 뒤 MediaStore에서 `DCIM/FeatureCam/` 항목을 조회한다.
+- 갤러리 분류는 하위 폴더가 아니라 파일명 code와 MIME type을 기준으로 처리한다.
+
+### Embedded Python Processor
+
+Python processor는 APK에 함께 패키징되는 실제 미디어 프로세싱 엔진이다. 스마트폰 로컬에서 실행되며 별도 서버, 개발 머신 IP, `10.0.2.2` 연결에 의존하지 않는다.
+
+- Android packaging: Chaquopy `17.0.0`
+- App Python runtime: Python `3.10`
+- Native processing packages: `numpy`, `opencv-python`
 - `fisheye.py`: fisheye 좌표 변환 수식
 - `image_processor.py`: 이미지 디코딩, fisheye 적용, 저장
 - `panorama_stitcher.py`: 3장 이미지 feature matching, homography 추정, warping, blending
 - `video_processor.py`: 영상 프레임별 처리, 재인코딩
-- `app.py`: Flutter 앱에서 호출하는 API entrypoint
+- `feature_processor.py`: Android MethodChannel에서 호출하는 Python entrypoint
 
 ### `FisheyeLensOverlay`
 
@@ -331,15 +347,17 @@ POST /process/panorama
     - panorama jpg
 ```
 
-Android emulator에서 로컬 Python server에 접근할 때는 `10.0.2.2`를 사용한다.
+Android 앱은 외부 Python server를 호출하지 않는다. Flutter는 `feature_cam/processing` MethodChannel을 호출하고, `MainActivity`가 Chaquopy로 APK 내부 Python 모듈을 실행한다.
 
 ```txt
-http://10.0.2.2:8000/process/photo
-http://10.0.2.2:8000/process/video
-http://10.0.2.2:8000/process/panorama
+Flutter ProcessingClient
+  -> Android MethodChannel(feature_cam/processing)
+  -> MainActivity background executor
+  -> Chaquopy Python(feature_processor.py)
+  -> output file path
 ```
 
-실기기 테스트에서는 같은 Wi-Fi의 개발 머신 IP를 사용하거나, 나중에 서버 배포 주소로 교체한다.
+따라서 emulator와 실기기 모두 같은 구조로 동작하며, 같은 Wi-Fi 개발 머신이나 서버 배포 주소가 필요하지 않다.
 
 ## Fisheye 처리 방향
 
@@ -446,7 +464,7 @@ overlay 표시 규칙:
 - crop 기준은 이전 원본 이미지의 오른쪽 20%다.
 - crop은 현재 프리뷰의 왼쪽 20% 영역에 맞춰 표시한다.
 - 투명도는 사용자가 현재 프리뷰와 겹침을 볼 수 있도록 낮은 alpha로 둔다.
-- overlay는 촬영 가이드일 뿐이며 Python backend에는 원본 3장을 전달한다.
+- overlay는 촬영 가이드일 뿐이며 내장 Python processor에는 원본 3장을 전달한다.
 
 ## Panorama Stitching 요구사항
 

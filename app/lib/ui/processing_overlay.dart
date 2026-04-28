@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import 'camera_motion.dart';
@@ -18,50 +16,55 @@ class ProcessingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      ignoring: !isVisible,
-      child: AnimatedOpacity(
+      ignoring: true,
+      child: AnimatedSlide(
         duration: CameraMotion.processing,
         curve: CameraMotion.cameraEaseOut,
-        opacity: isVisible ? 1 : 0,
-        child: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: ColoredBox(
-              color: Colors.black.withValues(alpha: 0.32),
-              child: Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: FeatureCamColors.surface.withValues(alpha: 0.82),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: FeatureCamColors.strokeSubtle),
+        offset: isVisible ? Offset.zero : const Offset(0, -0.35),
+        child: AnimatedOpacity(
+          duration: CameraMotion.processing,
+          curve: CameraMotion.cameraEaseOut,
+          opacity: isVisible ? 1 : 0,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: FeatureCamColors.surface.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: FeatureCamColors.strokeSubtle),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.24),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: FeatureCamColors.amber,
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: FeatureCamColors.amber,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            color: FeatureCamColors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 10),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: FeatureCamColors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),

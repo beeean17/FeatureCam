@@ -14,6 +14,8 @@ class TopCameraBar extends StatelessWidget {
     required this.onSettingsPressed,
     required this.onModePressed,
     required this.onFlashPressed,
+    this.isLandscape = false,
+    this.contentQuarterTurns = 0,
   });
 
   final bool flashEnabled;
@@ -22,44 +24,127 @@ class TopCameraBar extends StatelessWidget {
   final VoidCallback onSettingsPressed;
   final VoidCallback onModePressed;
   final VoidCallback onFlashPressed;
+  final bool isLandscape;
+  final int contentQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
+    if (isLandscape) {
+      return ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: FeatureCamColors.surface.withValues(alpha: 0.62),
+              border: Border(
+                left: BorderSide(
+                  color: FeatureCamColors.white.withValues(alpha: 0.04),
+                ),
+                right: BorderSide(
+                  color: FeatureCamColors.white.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            child: SafeArea(
+              left: false,
+              right: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 22,
+                ),
+                child: Column(
+                  children: [
+                    _TopIconButton(
+                      icon: Icons.settings_outlined,
+                      onPressed: onSettingsPressed,
+                      quarterTurns: contentQuarterTurns,
+                    ),
+                    const Spacer(),
+                    AnimatedSwitcher(
+                      duration: CameraMotion.iconState,
+                      child: isRecording
+                          ? const _RecordingPill(key: ValueKey('recording'))
+                          : _ModeButton(
+                              key: const ValueKey('mode-button'),
+                              isOpen: isModeBarOpen,
+                              isLandscape: true,
+                              quarterTurns: contentQuarterTurns,
+                              onPressed: onModePressed,
+                            ),
+                    ),
+                    const Spacer(),
+                    _TopIconButton(
+                      icon: flashEnabled
+                          ? Icons.flash_on_rounded
+                          : Icons.flash_off_rounded,
+                      color: flashEnabled
+                          ? FeatureCamColors.amber
+                          : FeatureCamColors.white,
+                      onPressed: onFlashPressed,
+                      quarterTurns: contentQuarterTurns,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
-          child: SizedBox(
-            height: 50,
-            child: Row(
-              children: [
-                _TopIconButton(
-                  icon: Icons.settings_outlined,
-                  onPressed: onSettingsPressed,
-                ),
-                const Spacer(),
-                AnimatedSwitcher(
-                  duration: CameraMotion.iconState,
-                  child: isRecording
-                      ? const _RecordingPill(key: ValueKey('recording'))
-                      : _ModeButton(
-                          key: const ValueKey('mode-button'),
-                          isOpen: isModeBarOpen,
-                          onPressed: onModePressed,
-                        ),
-                ),
-                const Spacer(),
-                _TopIconButton(
-                  icon: flashEnabled
-                      ? Icons.flash_on_rounded
-                      : Icons.flash_off_rounded,
-                  color: flashEnabled
-                      ? FeatureCamColors.amber
-                      : FeatureCamColors.white,
-                  onPressed: onFlashPressed,
-                ),
-              ],
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: FeatureCamColors.surface.withValues(alpha: 0.62),
+            border: Border(
+              top: BorderSide(
+                color: FeatureCamColors.white.withValues(alpha: 0.06),
+              ),
+              bottom: BorderSide(
+                color: FeatureCamColors.white.withValues(alpha: 0.04),
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 4),
+            child: SizedBox(
+              height: 40,
+              child: Row(
+                children: [
+                  _TopIconButton(
+                    icon: Icons.settings_outlined,
+                    onPressed: onSettingsPressed,
+                    quarterTurns: contentQuarterTurns,
+                  ),
+                  const Spacer(),
+                  AnimatedSwitcher(
+                    duration: CameraMotion.iconState,
+                    child: isRecording
+                        ? const _RecordingPill(key: ValueKey('recording'))
+                        : _ModeButton(
+                            key: const ValueKey('mode-button'),
+                            isOpen: isModeBarOpen,
+                            isLandscape: false,
+                            quarterTurns: contentQuarterTurns,
+                            onPressed: onModePressed,
+                          ),
+                  ),
+                  const Spacer(),
+                  _TopIconButton(
+                    icon: flashEnabled
+                        ? Icons.flash_on_rounded
+                        : Icons.flash_off_rounded,
+                    color: flashEnabled
+                        ? FeatureCamColors.amber
+                        : FeatureCamColors.white,
+                    onPressed: onFlashPressed,
+                    quarterTurns: contentQuarterTurns,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -69,9 +154,17 @@ class TopCameraBar extends StatelessWidget {
 }
 
 class _ModeButton extends StatelessWidget {
-  const _ModeButton({super.key, required this.isOpen, required this.onPressed});
+  const _ModeButton({
+    super.key,
+    required this.isOpen,
+    required this.isLandscape,
+    required this.quarterTurns,
+    required this.onPressed,
+  });
 
   final bool isOpen;
+  final bool isLandscape;
+  final int quarterTurns;
   final VoidCallback onPressed;
 
   @override
@@ -82,7 +175,11 @@ class _ModeButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: CameraMotion.iconState,
         curve: CameraMotion.cameraEaseInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        width: isLandscape ? 40 : null,
+        height: isLandscape ? 40 : null,
+        padding: isLandscape
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
           color: isOpen
               ? FeatureCamColors.amber.withValues(alpha: 0.16)
@@ -94,30 +191,49 @@ class _ModeButton extends StatelessWidget {
                 : Colors.transparent,
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'MODE',
-              style: TextStyle(
-                color: isOpen ? FeatureCamColors.amber : FeatureCamColors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.4,
-              ),
-            ),
-            const SizedBox(width: 5),
-            AnimatedRotation(
-              turns: isOpen ? 0.5 : 0,
-              duration: CameraMotion.iconState,
-              curve: CameraMotion.cameraEaseInOut,
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: isOpen ? FeatureCamColors.amber : FeatureCamColors.white,
-                size: 16,
-              ),
-            ),
-          ],
+        child: AnimatedRotation(
+          turns: quarterTurns / 4,
+          duration: CameraMotion.controlShift,
+          curve: CameraMotion.cameraEaseInOut,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLandscape)
+                Icon(
+                  Icons.dashboard_customize_outlined,
+                  color: isOpen
+                      ? FeatureCamColors.amber
+                      : FeatureCamColors.white,
+                  size: 21,
+                )
+              else ...[
+                Text(
+                  'MODE',
+                  style: TextStyle(
+                    color: isOpen
+                        ? FeatureCamColors.amber
+                        : FeatureCamColors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                AnimatedRotation(
+                  turns: isOpen ? 0.5 : 0,
+                  duration: CameraMotion.iconState,
+                  curve: CameraMotion.cameraEaseInOut,
+                  child: Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    color: isOpen
+                        ? FeatureCamColors.amber
+                        : FeatureCamColors.white,
+                    size: 15,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -164,12 +280,14 @@ class _TopIconButton extends StatefulWidget {
   const _TopIconButton({
     required this.icon,
     required this.onPressed,
+    required this.quarterTurns,
     this.color = FeatureCamColors.white,
   });
 
   final IconData icon;
   final Color color;
   final VoidCallback onPressed;
+  final int quarterTurns;
 
   @override
   State<_TopIconButton> createState() => _TopIconButtonState();
@@ -191,15 +309,44 @@ class _TopIconButtonState extends State<_TopIconButton> {
         curve: CameraMotion.cameraSpring,
         child: AnimatedContainer(
           duration: CameraMotion.iconState,
-          width: 48,
-          height: 48,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: _pressed ? const Color(0x1AFFFFFF) : Colors.transparent,
             shape: BoxShape.circle,
           ),
-          child: Icon(widget.icon, color: widget.color, size: 24),
+          child: _RotatingIcon(
+            icon: widget.icon,
+            color: widget.color,
+            quarterTurns: widget.quarterTurns,
+            size: 22,
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _RotatingIcon extends StatelessWidget {
+  const _RotatingIcon({
+    required this.icon,
+    required this.color,
+    required this.quarterTurns,
+    required this.size,
+  });
+
+  final IconData icon;
+  final Color color;
+  final int quarterTurns;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedRotation(
+      turns: quarterTurns / 4,
+      duration: CameraMotion.controlShift,
+      curve: CameraMotion.cameraEaseInOut,
+      child: Icon(icon, color: color, size: size),
     );
   }
 }
