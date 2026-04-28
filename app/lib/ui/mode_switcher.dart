@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../camera/camera_modes.dart';
 import 'camera_motion.dart';
 import 'camera_theme.dart';
+import 'mode_icon.dart';
 
 class ModeSwitcher extends StatelessWidget {
   const ModeSwitcher({
@@ -13,14 +14,14 @@ class ModeSwitcher extends StatelessWidget {
     required this.isOpen,
     required this.onModeSelected,
     this.isLandscape = false,
-    this.contentQuarterTurns = 0,
+    this.contentTurns = 0,
   });
 
   final CameraMode selectedMode;
   final bool isOpen;
   final ValueChanged<CameraMode> onModeSelected;
   final bool isLandscape;
-  final int contentQuarterTurns;
+  final double contentTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +46,7 @@ class ModeSwitcher extends StatelessWidget {
                 selectedMode: selectedMode,
                 onModeSelected: onModeSelected,
                 isLandscape: isLandscape,
-                contentQuarterTurns: contentQuarterTurns,
+                contentTurns: contentTurns,
               ),
             )
           : const SizedBox(key: ValueKey('mode-switcher-closed')),
@@ -58,13 +59,13 @@ class _ModePill extends StatelessWidget {
     required this.selectedMode,
     required this.onModeSelected,
     required this.isLandscape,
-    required this.contentQuarterTurns,
+    required this.contentTurns,
   });
 
   final CameraMode selectedMode;
   final ValueChanged<CameraMode> onModeSelected;
   final bool isLandscape;
-  final int contentQuarterTurns;
+  final double contentTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +91,7 @@ class _ModePill extends StatelessWidget {
                 return _ModeItem(
                   mode: mode,
                   isSelected: selectedMode == mode,
-                  quarterTurns: contentQuarterTurns,
+                  turns: contentTurns,
                   onTap: () => onModeSelected(mode),
                 );
               }).toList(),
@@ -106,57 +107,60 @@ class _ModeItem extends StatelessWidget {
   const _ModeItem({
     required this.mode,
     required this.isSelected,
-    required this.quarterTurns,
+    required this.turns,
     required this.onTap,
   });
 
   final CameraMode mode;
   final bool isSelected;
-  final int quarterTurns;
+  final double turns;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        height: 38,
-        width: 78,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedRotation(
-              turns: quarterTurns / 4,
-              duration: CameraMotion.controlShift,
-              curve: CameraMotion.cameraEaseInOut,
-              child: AnimatedDefaultTextStyle(
-                duration: CameraMotion.modeSwitch,
-                curve: CameraMotion.cameraEaseInOut,
-                style: TextStyle(
-                  color: isSelected
-                      ? FeatureCamColors.amber
-                      : FeatureCamColors.textSecondary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+    return Tooltip(
+      message: mode.label,
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: mode.label,
+        child: GestureDetector(
+          key: ValueKey('mode-${mode.name}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            height: 42,
+            width: 52,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedRotation(
+                  turns: turns,
+                  duration: CameraMotion.controlShift,
+                  curve: CameraMotion.cameraEaseInOut,
+                  child: ModeIcon(
+                    mode: mode,
+                    color: isSelected
+                        ? FeatureCamColors.amber
+                        : FeatureCamColors.textSecondary,
+                    size: 22,
+                  ),
                 ),
-                child: Text(mode.label),
-              ),
+                const SizedBox(height: 5),
+                AnimatedContainer(
+                  duration: CameraMotion.modeSwitch,
+                  curve: CameraMotion.cameraEaseInOut,
+                  width: isSelected ? 28 : 0,
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: FeatureCamColors.amber,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 5),
-            AnimatedContainer(
-              duration: CameraMotion.modeSwitch,
-              curve: CameraMotion.cameraEaseInOut,
-              width: isSelected ? 28 : 0,
-              height: 2,
-              decoration: BoxDecoration(
-                color: FeatureCamColors.amber,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

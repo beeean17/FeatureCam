@@ -1,6 +1,5 @@
-import 'dart:ui';
-
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 
 class CameraControllerService {
   CameraController? _controller;
@@ -27,26 +26,60 @@ class CameraControllerService {
     await _selectCamera(nextIndex);
   }
 
-  Future<XFile> takePhoto() async {
+  Future<XFile> takePhoto({DeviceOrientation? captureOrientation}) async {
     final activeController = _requireController();
     if (activeController.value.isTakingPicture) {
       throw CameraException('busy', 'Camera is already taking a picture.');
     }
-    return activeController.takePicture();
+    if (captureOrientation != null) {
+      try {
+        await activeController.lockCaptureOrientation(captureOrientation);
+      } on CameraException {
+        // Capture orientation lock is device-dependent.
+      }
+    }
+    try {
+      return await activeController.takePicture();
+    } finally {
+      if (captureOrientation != null) {
+        try {
+          await activeController.unlockCaptureOrientation();
+        } on CameraException {
+          // If unlocking fails, the next capture will try to lock again.
+        }
+      }
+    }
   }
 
-  Future<void> startVideoRecording() async {
+  Future<void> startVideoRecording({
+    DeviceOrientation? captureOrientation,
+  }) async {
     final activeController = _requireController();
     if (activeController.value.isRecordingVideo) {
       return;
+    }
+    if (captureOrientation != null) {
+      try {
+        await activeController.lockCaptureOrientation(captureOrientation);
+      } on CameraException {
+        // Capture orientation lock is device-dependent.
+      }
     }
     await activeController.prepareForVideoRecording();
     await activeController.startVideoRecording();
   }
 
-  Future<XFile> stopVideoRecording() {
+  Future<XFile> stopVideoRecording() async {
     final activeController = _requireController();
-    return activeController.stopVideoRecording();
+    try {
+      return await activeController.stopVideoRecording();
+    } finally {
+      try {
+        await activeController.unlockCaptureOrientation();
+      } on CameraException {
+        // The controller may already be unlocked.
+      }
+    }
   }
 
   Future<void> focusAt(Offset normalizedPoint) async {

@@ -2,8 +2,10 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../camera/camera_modes.dart';
 import 'camera_motion.dart';
 import 'camera_theme.dart';
+import 'mode_icon.dart';
 
 class TopCameraBar extends StatelessWidget {
   const TopCameraBar({
@@ -11,21 +13,23 @@ class TopCameraBar extends StatelessWidget {
     required this.flashEnabled,
     required this.isRecording,
     required this.isModeBarOpen,
+    required this.selectedMode,
     required this.onSettingsPressed,
     required this.onModePressed,
     required this.onFlashPressed,
     this.isLandscape = false,
-    this.contentQuarterTurns = 0,
+    this.contentTurns = 0,
   });
 
   final bool flashEnabled;
   final bool isRecording;
   final bool isModeBarOpen;
+  final CameraMode selectedMode;
   final VoidCallback onSettingsPressed;
   final VoidCallback onModePressed;
   final VoidCallback onFlashPressed;
   final bool isLandscape;
-  final int contentQuarterTurns;
+  final double contentTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +62,7 @@ class TopCameraBar extends StatelessWidget {
                     _TopIconButton(
                       icon: Icons.settings_outlined,
                       onPressed: onSettingsPressed,
-                      quarterTurns: contentQuarterTurns,
+                      turns: contentTurns,
                     ),
                     const Spacer(),
                     AnimatedSwitcher(
@@ -67,9 +71,10 @@ class TopCameraBar extends StatelessWidget {
                           ? const _RecordingPill(key: ValueKey('recording'))
                           : _ModeButton(
                               key: const ValueKey('mode-button'),
+                              mode: selectedMode,
                               isOpen: isModeBarOpen,
                               isLandscape: true,
-                              quarterTurns: contentQuarterTurns,
+                              turns: contentTurns,
                               onPressed: onModePressed,
                             ),
                     ),
@@ -82,7 +87,7 @@ class TopCameraBar extends StatelessWidget {
                           ? FeatureCamColors.amber
                           : FeatureCamColors.white,
                       onPressed: onFlashPressed,
-                      quarterTurns: contentQuarterTurns,
+                      turns: contentTurns,
                     ),
                   ],
                 ),
@@ -117,7 +122,7 @@ class TopCameraBar extends StatelessWidget {
                   _TopIconButton(
                     icon: Icons.settings_outlined,
                     onPressed: onSettingsPressed,
-                    quarterTurns: contentQuarterTurns,
+                    turns: contentTurns,
                   ),
                   const Spacer(),
                   AnimatedSwitcher(
@@ -126,9 +131,10 @@ class TopCameraBar extends StatelessWidget {
                         ? const _RecordingPill(key: ValueKey('recording'))
                         : _ModeButton(
                             key: const ValueKey('mode-button'),
+                            mode: selectedMode,
                             isOpen: isModeBarOpen,
                             isLandscape: false,
-                            quarterTurns: contentQuarterTurns,
+                            turns: contentTurns,
                             onPressed: onModePressed,
                           ),
                   ),
@@ -141,7 +147,7 @@ class TopCameraBar extends StatelessWidget {
                         ? FeatureCamColors.amber
                         : FeatureCamColors.white,
                     onPressed: onFlashPressed,
-                    quarterTurns: contentQuarterTurns,
+                    turns: contentTurns,
                   ),
                 ],
               ),
@@ -156,15 +162,17 @@ class TopCameraBar extends StatelessWidget {
 class _ModeButton extends StatelessWidget {
   const _ModeButton({
     super.key,
+    required this.mode,
     required this.isOpen,
     required this.isLandscape,
-    required this.quarterTurns,
+    required this.turns,
     required this.onPressed,
   });
 
+  final CameraMode mode;
   final bool isOpen;
   final bool isLandscape;
-  final int quarterTurns;
+  final double turns;
   final VoidCallback onPressed;
 
   @override
@@ -191,34 +199,26 @@ class _ModeButton extends StatelessWidget {
                 : Colors.transparent,
           ),
         ),
-        child: AnimatedRotation(
-          turns: quarterTurns / 4,
-          duration: CameraMotion.controlShift,
-          curve: CameraMotion.cameraEaseInOut,
+        child: Semantics(
+          button: true,
+          label: 'MODE',
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isLandscape)
-                Icon(
-                  Icons.dashboard_customize_outlined,
+              AnimatedRotation(
+                turns: turns,
+                duration: CameraMotion.controlShift,
+                curve: CameraMotion.cameraEaseInOut,
+                child: ModeIcon(
+                  mode: mode,
                   color: isOpen
                       ? FeatureCamColors.amber
                       : FeatureCamColors.white,
-                  size: 21,
-                )
-              else ...[
-                Text(
-                  'MODE',
-                  style: TextStyle(
-                    color: isOpen
-                        ? FeatureCamColors.amber
-                        : FeatureCamColors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4,
-                  ),
+                  size: isLandscape ? 22 : 21,
                 ),
-                const SizedBox(width: 5),
+              ),
+              if (!isLandscape) ...[
+                const SizedBox(width: 6),
                 AnimatedRotation(
                   turns: isOpen ? 0.5 : 0,
                   duration: CameraMotion.iconState,
@@ -228,7 +228,7 @@ class _ModeButton extends StatelessWidget {
                     color: isOpen
                         ? FeatureCamColors.amber
                         : FeatureCamColors.white,
-                    size: 15,
+                    size: 18,
                   ),
                 ),
               ],
@@ -280,14 +280,14 @@ class _TopIconButton extends StatefulWidget {
   const _TopIconButton({
     required this.icon,
     required this.onPressed,
-    required this.quarterTurns,
+    required this.turns,
     this.color = FeatureCamColors.white,
   });
 
   final IconData icon;
   final Color color;
   final VoidCallback onPressed;
-  final int quarterTurns;
+  final double turns;
 
   @override
   State<_TopIconButton> createState() => _TopIconButtonState();
@@ -318,7 +318,7 @@ class _TopIconButtonState extends State<_TopIconButton> {
           child: _RotatingIcon(
             icon: widget.icon,
             color: widget.color,
-            quarterTurns: widget.quarterTurns,
+            turns: widget.turns,
             size: 22,
           ),
         ),
@@ -331,19 +331,19 @@ class _RotatingIcon extends StatelessWidget {
   const _RotatingIcon({
     required this.icon,
     required this.color,
-    required this.quarterTurns,
+    required this.turns,
     required this.size,
   });
 
   final IconData icon;
   final Color color;
-  final int quarterTurns;
+  final double turns;
   final double size;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedRotation(
-      turns: quarterTurns / 4,
+      turns: turns,
       duration: CameraMotion.controlShift,
       curve: CameraMotion.cameraEaseInOut,
       child: Icon(icon, color: color, size: size),

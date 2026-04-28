@@ -53,6 +53,7 @@ class _CameraScreenState extends State<CameraScreen> {
   Timer? _focusIndicatorTimer;
   StreamSubscription<dynamic>? _orientationSubscription;
   int _controlQuarterTurns = 0;
+  double _controlTurns = 0;
 
   @override
   void initState() {
@@ -171,7 +172,9 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _captureNormalPhoto() async {
     try {
       await _runPhotoFlash();
-      final rawPhoto = await _cameraService.takePhoto();
+      final rawPhoto = await _cameraService.takePhoto(
+        captureOrientation: _captureOrientation(),
+      );
       final output = await _captureStore.copyOriginal(
         rawPhoto,
         mode: CameraMode.photo,
@@ -186,7 +189,9 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _captureFisheyePhoto() async {
     try {
       await _runPhotoFlash();
-      final rawPhoto = await _cameraService.takePhoto();
+      final rawPhoto = await _cameraService.takePhoto(
+        captureOrientation: _captureOrientation(),
+      );
       final original = await _captureStore.copyOriginal(
         rawPhoto,
         mode: CameraMode.fisheye,
@@ -254,7 +259,9 @@ class _CameraScreenState extends State<CameraScreen> {
         return;
       }
 
-      await _cameraService.startVideoRecording();
+      await _cameraService.startVideoRecording(
+        captureOrientation: _captureOrientation(),
+      );
       if (!mounted) {
         return;
       }
@@ -274,7 +281,9 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _capturePanoramaStep() async {
     try {
       await _runPhotoFlash();
-      final rawPhoto = await _cameraService.takePhoto();
+      final rawPhoto = await _cameraService.takePhoto(
+        captureOrientation: _captureOrientation(),
+      );
       final original = await _captureStore.copyOriginal(
         rawPhoto,
         mode: CameraMode.panorama,
@@ -426,11 +435,17 @@ class _CameraScreenState extends State<CameraScreen> {
           num turns => turns.toInt(),
           _ => 0,
         };
-        if (!mounted || nextQuarterTurns == _controlQuarterTurns) {
+        final normalizedQuarterTurns = nextQuarterTurns % 4;
+        if (!mounted || normalizedQuarterTurns == _controlQuarterTurns) {
           return;
         }
+        final nextTurns = CameraMotion.naturalOrientationTurns(
+          quarterTurns: normalizedQuarterTurns,
+          fromTurns: _controlTurns,
+        );
         setState(() {
-          _controlQuarterTurns = nextQuarterTurns % 4;
+          _controlQuarterTurns = normalizedQuarterTurns;
+          _controlTurns = nextTurns;
         });
       },
       onError: (_) {
@@ -452,7 +467,6 @@ class _CameraScreenState extends State<CameraScreen> {
     final safePadding = MediaQuery.paddingOf(context);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    final controlQuarterTurns = _controlQuarterTurns;
     final layout = _CameraLayoutSpec.fromSafePadding(
       safePadding,
       isLandscape: isLandscape,
@@ -502,11 +516,12 @@ class _CameraScreenState extends State<CameraScreen> {
               flashEnabled: _flashEnabled,
               isRecording: _isRecording,
               isModeBarOpen: _isModeBarOpen,
+              selectedMode: _mode,
               onSettingsPressed: () {},
               onModePressed: _toggleModeBar,
               onFlashPressed: _toggleFlash,
               isLandscape: isLandscape,
-              contentQuarterTurns: controlQuarterTurns,
+              contentTurns: _controlTurns,
             ),
           ),
           Positioned(
@@ -521,7 +536,7 @@ class _CameraScreenState extends State<CameraScreen> {
               isOpen: _isModeBarOpen,
               onModeSelected: _setMode,
               isLandscape: isLandscape,
-              contentQuarterTurns: controlQuarterTurns,
+              contentTurns: _controlTurns,
             ),
           ),
           if (_mode == CameraMode.fisheye)
@@ -570,8 +585,10 @@ class _CameraScreenState extends State<CameraScreen> {
                 switchOutCurve: CameraMotion.cameraEaseInOut,
                 child: _mode != CameraMode.panorama
                     ? const SizedBox.shrink(key: ValueKey('empty-lens-space'))
-                    : RotatedBox(
-                        quarterTurns: isLandscape ? controlQuarterTurns : 0,
+                    : AnimatedRotation(
+                        turns: isLandscape ? _controlTurns : 0,
+                        duration: CameraMotion.controlShift,
+                        curve: CameraMotion.cameraEaseInOut,
                         child: PanoramaCaptureStrip(
                           key: const ValueKey('panorama-strip'),
                           state: _panorama,
@@ -596,7 +613,7 @@ class _CameraScreenState extends State<CameraScreen> {
               onSwitchCameraPressed: _switchCamera,
               lastCapture: _lastCapture,
               isLandscape: isLandscape,
-              contentQuarterTurns: controlQuarterTurns,
+              contentTurns: _controlTurns,
             ),
           ),
           Positioned(
@@ -611,6 +628,15 @@ class _CameraScreenState extends State<CameraScreen> {
         ],
       ),
     );
+  }
+
+  DeviceOrientation _captureOrientation() {
+    return switch (_controlQuarterTurns) {
+      1 => DeviceOrientation.landscapeLeft,
+      2 => DeviceOrientation.portraitDown,
+      3 => DeviceOrientation.landscapeRight,
+      _ => DeviceOrientation.portraitUp,
+    };
   }
 }
 

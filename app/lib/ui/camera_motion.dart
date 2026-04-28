@@ -18,4 +18,28 @@ class CameraMotion {
   static const panoramaGuide = Duration(milliseconds: 260);
   static const lensSettle = Duration(milliseconds: 180);
   static const focusIndicator = Duration(milliseconds: 720);
+
+  static double naturalOrientationTurns({
+    required int quarterTurns,
+    required double fromTurns,
+  }) {
+    final baseTurns = (quarterTurns % 4) / 4;
+    final candidates = <double>[
+      baseTurns - 2,
+      baseTurns - 1,
+      baseTurns,
+      baseTurns + 1,
+      baseTurns + 2,
+    ];
+    var bestTurns = candidates.first;
+    var bestDistance = (bestTurns - fromTurns).abs();
+    for (final turns in candidates.skip(1)) {
+      final distance = (turns - fromTurns).abs();
+      if (distance < bestDistance) {
+        bestTurns = turns;
+        bestDistance = distance;
+      }
+    }
+    return bestTurns;
+  }
 }

@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../gallery/feature_cam_gallery_store.dart';
 import 'camera_theme.dart';
@@ -39,15 +40,22 @@ class _FeatureCamGalleryScreenState extends State<FeatureCamGalleryScreen> {
     });
   }
 
-  void _openItem(FeatureCamMediaItem item) {
+  void _openItem(FeatureCamMediaItem item, List<FeatureCamMediaItem> items) {
     if (item.isVideo) {
       unawaited(_store.openMedia(item));
       return;
     }
+    final imageItems = items.where((candidate) => !candidate.isVideo).toList();
+    final initialIndex = imageItems.indexWhere(
+      (candidate) => candidate.uri == item.uri,
+    );
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) =>
-            FeatureCamImageViewerScreen(item: item, store: _store),
+        builder: (context) => FeatureCamImageViewerScreen(
+          items: imageItems,
+          initialIndex: initialIndex < 0 ? 0 : initialIndex,
+          store: _store,
+        ),
       ),
     );
   }
@@ -121,7 +129,10 @@ class _FeatureCamGalleryScreenState extends State<FeatureCamGalleryScreen> {
               itemCount: result.items.length,
               itemBuilder: (context, index) {
                 final item = result.items[index];
-                return _GalleryTile(item: item, onTap: () => _openItem(item));
+                return _GalleryTile(
+                  item: item,
+                  onTap: () => _openItem(item, result.items),
+                );
               },
             ),
           );
@@ -187,11 +198,13 @@ class _GalleryTile extends StatelessWidget {
 class FeatureCamImageViewerScreen extends StatefulWidget {
   const FeatureCamImageViewerScreen({
     super.key,
-    required this.item,
+    required this.items,
+    required this.initialIndex,
     required this.store,
   });
 
-  final FeatureCamMediaItem item;
+  final List<FeatureCamMediaItem> items;
+  final int initialIndex;
   final FeatureCamGalleryStore store;
 
   @override
@@ -201,58 +214,227 @@ class FeatureCamImageViewerScreen extends StatefulWidget {
 
 class _FeatureCamImageViewerScreenState
     extends State<FeatureCamImageViewerScreen> {
-  late Future<Uint8List> _imageFuture;
+  late final PageController _pageController;
+  late int _currentIndex;
+  final Map<String, Future<_LoadedGalleryImage>> _imageFutures = {};
+  final Map<String, Size> _imageSizes = {};
+
+  FeatureCamMediaItem get _currentItem => widget.items[_currentIndex];
 
   @override
   void initState() {
     super.initState();
-    _imageFuture = widget.store.loadMediaBytes(widget.item.uri);
+    _currentIndex = widget.initialIndex.clamp(0, widget.items.length - 1);
+    _pageController = PageController(initialPage: _currentIndex);
+    unawaited(_loadImage(_currentItem));
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    unawaited(_lockPortrait());
+    super.dispose();
+  }
+
+  Future<_LoadedGalleryImage> _loadImage(FeatureCamMediaItem item) {
+    return _imageFutures.putIfAbsent(item.uri, () async {
+      final bytes = await widget.store.loadMediaBytes(item.uri);
+      final size = await _decodeImageSize(bytes);
+      _imageSizes[item.uri] = size;
+      if (mounted && item.uri == _currentItem.uri) {
+        setState(() {});
+        await _applyOrientationPolicy(size);
+      }
+      return _LoadedGalleryImage(bytes: bytes, size: size);
+    });
+  }
+
+  Future<Size> _decodeImageSize(Uint8List bytes) async {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromList(bytes, completer.complete);
+    final image = await completer.future;
+    final size = Size(image.width.toDouble(), image.height.toDouble());
+    image.dispose();
+    return size;
+  }
+
+  void _handlePageChanged(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+    final currentSize = _imageSizes[_currentItem.uri];
+    if (currentSize != null) {
+      unawaited(_applyOrientationPolicy(currentSize));
+      return;
+    }
+    unawaited(_loadImage(_currentItem));
+  }
+
+  Future<void> _applyOrientationPolicy(Size imageSize) {
+    if (imageSize.width > imageSize.height) {
+      return SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+    return _lockPortrait();
+  }
+
+  Future<void> _lockPortrait() {
+    return SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLandscapeScreen =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final title = _currentItem.displayName;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: FeatureCamColors.white,
-        elevation: 0,
-        title: Text(
-          widget.item.displayName,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: FutureBuilder<Uint8List>(
-        future: _imageFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(
-              child: CircularProgressIndicator(color: FeatureCamColors.amber),
-            );
-          }
-          if (snapshot.hasError || snapshot.data == null) {
-            return _GalleryMessage(
-              icon: Icons.broken_image_outlined,
-              title: '이미지를 열 수 없습니다',
-              message: '${snapshot.error ?? '이미지 데이터가 없습니다.'}',
-            );
-          }
-          return InteractiveViewer(
-            minScale: 1,
-            maxScale: 5,
-            child: Center(
-              child: Image.memory(
-                snapshot.data!,
-                fit: BoxFit.contain,
-                gaplessPlayback: true,
+      appBar: isLandscapeScreen
+          ? null
+          : AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: FeatureCamColors.white,
+              elevation: 0,
+              title: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          );
-        },
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.items.length,
+            onPageChanged: _handlePageChanged,
+            itemBuilder: (context, index) {
+              final item = widget.items[index];
+              return _GalleryImagePage(imageFuture: _loadImage(item));
+            },
+          ),
+          if (isLandscapeScreen &&
+              (_imageSizes[_currentItem.uri]?.width ?? 0) >
+                  (_imageSizes[_currentItem.uri]?.height ?? 1))
+            _LandscapeViewerBar(title: title),
+        ],
       ),
     );
   }
+}
+
+class _GalleryImagePage extends StatelessWidget {
+  const _GalleryImagePage({required this.imageFuture});
+
+  final Future<_LoadedGalleryImage> imageFuture;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_LoadedGalleryImage>(
+      future: imageFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: FeatureCamColors.amber),
+          );
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return _GalleryMessage(
+            icon: Icons.broken_image_outlined,
+            title: '이미지를 열 수 없습니다',
+            message: '${snapshot.error ?? '이미지 데이터가 없습니다.'}',
+          );
+        }
+        return InteractiveViewer(
+          minScale: 1,
+          maxScale: 5,
+          panEnabled: false,
+          child: Center(
+            child: Image.memory(
+              snapshot.data!.bytes,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LandscapeViewerBar extends StatelessWidget {
+  const _LandscapeViewerBar({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Positioned(
+      top: top + 8,
+      left: 12,
+      right: 12,
+      child: Row(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.42),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: FeatureCamColors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.32),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: FeatureCamColors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadedGalleryImage {
+  const _LoadedGalleryImage({required this.bytes, required this.size});
+
+  final Uint8List bytes;
+  final Size size;
+
+  bool get isLandscape => size.width > size.height;
 }
 
 class _CodeBadge extends StatelessWidget {
