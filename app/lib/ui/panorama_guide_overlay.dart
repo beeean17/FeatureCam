@@ -13,31 +13,37 @@ class PanoramaGuideOverlay extends StatelessWidget {
     super.key,
     required this.state,
     required this.guideImage,
+    required this.orientationQuarterTurns,
   });
 
   final PanoramaCaptureState state;
   final File? guideImage;
+  final int orientationQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: LayoutBuilder(
         builder: (context, constraints) {
+          final quarterTurns = orientationQuarterTurns % 4;
+          final isLandscapeGuide = quarterTurns == 1 || quarterTurns == 3;
+          if (isLandscapeGuide) {
+            return _LandscapeGuideLayer(
+              state: state,
+              guideImage: guideImage,
+              quarterTurns: quarterTurns,
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+            );
+          }
           return Stack(
             children: [
-              Positioned(
-                top: 20,
-                left: 0,
-                right: 0,
-                child: Center(child: _ProgressPill(step: state.step)),
-              ),
               AnimatedPositioned(
                 duration: CameraMotion.panoramaGuide,
                 curve: CameraMotion.cameraEaseOut,
                 left: state.guideVisible ? 0 : -96,
                 top: 0,
                 bottom: 0,
-                width: constraints.maxWidth * 0.22,
+                width: constraints.maxWidth * 0.20,
                 child: AnimatedOpacity(
                   duration: CameraMotion.panoramaGuide,
                   opacity: state.guideVisible ? 1 : 0,
@@ -58,6 +64,91 @@ class PanoramaGuideOverlay extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _LandscapeGuideLayer extends StatelessWidget {
+  const _LandscapeGuideLayer({
+    required this.state,
+    required this.guideImage,
+    required this.quarterTurns,
+    required this.size,
+  });
+
+  final PanoramaCaptureState state;
+  final File? guideImage;
+  final int quarterTurns;
+  final Size size;
+
+  @override
+  Widget build(BuildContext context) {
+    final bandHeight = size.height * 0.20;
+    final isTop = quarterTurns == 1;
+    return Stack(
+      children: [
+        AnimatedPositioned(
+          duration: CameraMotion.panoramaGuide,
+          curve: CameraMotion.cameraEaseOut,
+          left: 0,
+          right: 0,
+          top: isTop ? (state.guideVisible ? 0 : -bandHeight) : null,
+          bottom: isTop ? null : (state.guideVisible ? 0 : -bandHeight),
+          height: bandHeight,
+          child: AnimatedOpacity(
+            duration: CameraMotion.panoramaGuide,
+            opacity: state.guideVisible ? 1 : 0,
+            child: _LandscapePreviousFrameGuide(image: guideImage),
+          ),
+        ),
+        if (state.guideVisible)
+          Positioned(
+            left: size.width * 0.46,
+            top: isTop ? bandHeight + 8 : null,
+            bottom: isTop ? null : bandHeight + 8,
+            child: Icon(
+              isTop
+                  ? Icons.keyboard_double_arrow_up_rounded
+                  : Icons.keyboard_double_arrow_down_rounded,
+              color: FeatureCamColors.amber,
+              size: 28,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _LandscapePreviousFrameGuide extends StatelessWidget {
+  const _LandscapePreviousFrameGuide({required this.image});
+
+  final File? image;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (image != null)
+          ClipRect(
+            child: Opacity(
+              opacity: 0.48,
+              child: Image.file(
+                image!,
+                fit: BoxFit.cover,
+                alignment: Alignment.centerRight,
+                gaplessPlayback: true,
+              ),
+            ),
+          )
+        else
+          CustomPaint(painter: _PreviousFramePainter()),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: FeatureCamColors.amber.withValues(alpha: 0.10),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -118,49 +209,11 @@ class PanoramaCaptureStrip extends StatelessWidget {
   }
 }
 
-class _ProgressPill extends StatelessWidget {
-  const _ProgressPill({required this.step});
-
-  final int step;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: FeatureCamColors.surface.withValues(alpha: 0.64),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: FeatureCamColors.strokeSubtle),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: AnimatedSwitcher(
-              duration: CameraMotion.iconState,
-              child: Text(
-                'PANORAMA $step/3',
-                key: ValueKey(step),
-                style: const TextStyle(
-                  color: FeatureCamColors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _PreviousFrameGuide extends StatelessWidget {
   const _PreviousFrameGuide({required this.image});
 
   final File? image;
+  static const double _overlapFraction = 0.20;
 
   @override
   Widget build(BuildContext context) {
@@ -168,18 +221,38 @@ class _PreviousFrameGuide extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         if (image != null)
-          ClipRect(
-            child: FractionallySizedBox(
-              widthFactor: 5,
-              alignment: Alignment.centerRight,
-              child: Image.file(image!, fit: BoxFit.cover),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final fullFrameWidth = constraints.maxWidth / _overlapFraction;
+              return ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.centerRight,
+                  minWidth: fullFrameWidth,
+                  maxWidth: fullFrameWidth,
+                  minHeight: constraints.maxHeight,
+                  maxHeight: constraints.maxHeight,
+                  child: SizedBox(
+                    width: fullFrameWidth,
+                    height: constraints.maxHeight,
+                    child: Opacity(
+                      opacity: 0.48,
+                      child: Image.file(
+                        image!,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.centerRight,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           )
         else
           CustomPaint(painter: _PreviousFramePainter()),
         DecoratedBox(
           decoration: BoxDecoration(
-            color: FeatureCamColors.amber.withValues(alpha: 0.22),
+            color: FeatureCamColors.amber.withValues(alpha: 0.10),
           ),
         ),
       ],

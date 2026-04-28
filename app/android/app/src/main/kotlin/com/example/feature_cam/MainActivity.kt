@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -112,6 +114,13 @@ class MainActivity : FlutterActivity() {
                         displayName = call.requiredString("displayName"),
                         mimeType = call.requiredString("mimeType"),
                     ).toString()
+                }
+                "cropImageToAspect" -> runMediaStore(result) {
+                    cropImageToAspect(
+                        inputPath = call.requiredString("inputPath"),
+                        outputPath = call.requiredString("outputPath"),
+                        aspectRatio = call.requiredDouble("aspectRatio"),
+                    )
                 }
                 else -> result.notImplemented()
             }
@@ -352,6 +361,81 @@ class MainActivity : FlutterActivity() {
         return contentResolver.openInputStream(uri)?.use { input ->
             input.readBytes()
         } ?: throw IllegalStateException("Could not open media: $uriString")
+    }
+
+    private fun cropImageToAspect(
+        inputPath: String,
+        outputPath: String,
+        aspectRatio: Double,
+    ): String {
+        val source = File(inputPath)
+        require(source.exists()) { "Source image does not exist: $inputPath" }
+
+        val decoded = BitmapFactory.decodeFile(inputPath)
+            ?: throw IllegalStateException("Could not decode image: $inputPath")
+        val bitmap = decoded.applyExifOrientation(inputPath)
+        val targetRatio = aspectRatio.coerceAtLeast(0.01)
+        val sourceRatio = bitmap.width.toDouble() / bitmap.height.toDouble()
+
+        val cropWidth: Int
+        val cropHeight: Int
+        if (sourceRatio > targetRatio) {
+            cropHeight = bitmap.height
+            cropWidth = (cropHeight * targetRatio).toInt().coerceAtLeast(1)
+        } else {
+            cropWidth = bitmap.width
+            cropHeight = (cropWidth / targetRatio).toInt().coerceAtLeast(1)
+        }
+
+        val cropLeft = ((bitmap.width - cropWidth) / 2).coerceAtLeast(0)
+        val cropTop = ((bitmap.height - cropHeight) / 2).coerceAtLeast(0)
+        val cropped = Bitmap.createBitmap(bitmap, cropLeft, cropTop, cropWidth, cropHeight)
+        val output = File(outputPath)
+        output.parentFile?.mkdirs()
+        output.outputStream().use { stream ->
+            cropped.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+        }
+        if (cropped != bitmap) {
+            cropped.recycle()
+        }
+        if (bitmap != decoded) {
+            bitmap.recycle()
+        }
+        if (!decoded.isRecycled) {
+            decoded.recycle()
+        }
+        return outputPath
+    }
+
+    private fun Bitmap.applyExifOrientation(path: String): Bitmap {
+        val orientation = try {
+            ExifInterface(path).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+        } catch (_: Throwable) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1f, 1f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.preScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(270f)
+                matrix.preScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            else -> return this
+        }
+
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
 
     private fun openMedia(

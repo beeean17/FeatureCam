@@ -16,6 +16,8 @@ class CaptureStore {
     required CameraMode mode,
     required String kind,
     bool exportToDcim = true,
+    bool cropToCaptureFrame = false,
+    double cropAspectRatio = 3 / 4,
   }) async {
     final extension = _extensionFor(
       source.path,
@@ -27,7 +29,14 @@ class CaptureStore {
       extension: extension,
       processed: false,
     );
-    final copiedFile = await File(source.path).copy(output.path);
+    final isPhoto = kind != 'video';
+    final copiedFile = isPhoto && cropToCaptureFrame
+        ? await _cropImageToCaptureFrame(
+            source.path,
+            output.path,
+            aspectRatio: cropAspectRatio,
+          )
+        : await File(source.path).copy(output.path);
     if (exportToDcim) {
       await saveToDcim(copiedFile);
     }
@@ -133,6 +142,19 @@ class CaptureStore {
   }
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+  Future<File> _cropImageToCaptureFrame(
+    String inputPath,
+    String outputPath, {
+    required double aspectRatio,
+  }) async {
+    await _mediaStoreChannel.invokeMethod<String>('cropImageToAspect', {
+      'inputPath': inputPath,
+      'outputPath': outputPath,
+      'aspectRatio': aspectRatio,
+    });
+    return File(outputPath);
+  }
 
   String _mimeTypeFor(String path) {
     return switch (_extensionFor(path, fallback: 'jpg')) {

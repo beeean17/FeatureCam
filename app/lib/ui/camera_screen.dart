@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +55,7 @@ class _CameraScreenState extends State<CameraScreen> {
   StreamSubscription<dynamic>? _orientationSubscription;
   int _controlQuarterTurns = 0;
   double _controlTurns = 0;
+  double _captureAspectRatio = 3 / 4;
 
   @override
   void initState() {
@@ -125,7 +127,11 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
-  void _handlePreviewTap(TapUpDetails details, Size previewSize) {
+  void _handlePreviewTap(
+    TapUpDetails details,
+    Size previewSize,
+    Offset previewOrigin,
+  ) {
     if (!_cameraService.isReady || _isInitializingCamera) {
       return;
     }
@@ -137,7 +143,7 @@ class _CameraScreenState extends State<CameraScreen> {
     );
     HapticFeedback.selectionClick();
     setState(() {
-      _focusIndicatorPoint = localPosition;
+      _focusIndicatorPoint = previewOrigin + localPosition;
     });
     _focusIndicatorTimer?.cancel();
     _focusIndicatorTimer = Timer(CameraMotion.focusIndicator, () {
@@ -179,6 +185,8 @@ class _CameraScreenState extends State<CameraScreen> {
         rawPhoto,
         mode: CameraMode.photo,
         kind: 'photo',
+        cropToCaptureFrame: true,
+        cropAspectRatio: _captureCropAspectRatio(),
       );
       _setLastCapture(output, '사진 저장됨');
     } catch (error) {
@@ -196,6 +204,8 @@ class _CameraScreenState extends State<CameraScreen> {
         rawPhoto,
         mode: CameraMode.fisheye,
         kind: 'photo',
+        cropToCaptureFrame: true,
+        cropAspectRatio: _captureCropAspectRatio(),
       );
       _runBackgroundProcessing(
         startedMessage: 'Fisheye 처리 시작됨',
@@ -281,13 +291,13 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _capturePanoramaStep() async {
     try {
       await _runPhotoFlash();
-      final rawPhoto = await _cameraService.takePhoto(
-        captureOrientation: _captureOrientation(),
-      );
+      final rawPhoto = await _cameraService.takePhoto();
       final original = await _captureStore.copyOriginal(
         rawPhoto,
         mode: CameraMode.panorama,
         kind: 'photo',
+        cropToCaptureFrame: true,
+        cropAspectRatio: _captureCropAspectRatio(),
       );
       _panoramaFiles.add(original);
 
@@ -467,176 +477,220 @@ class _CameraScreenState extends State<CameraScreen> {
     final safePadding = MediaQuery.paddingOf(context);
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
+    final isDeviceLandscape =
+        _controlQuarterTurns == 1 || _controlQuarterTurns == 3;
     final layout = _CameraLayoutSpec.fromSafePadding(
       safePadding,
       isLandscape: isLandscape,
     );
 
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapUp: (details) => _handlePreviewTap(
-                    details,
-                    Size(constraints.maxWidth, constraints.maxHeight),
-                  ),
-                  child: CameraPreviewView(
-                    mode: _mode,
-                    controller: _cameraService.controller,
-                    errorMessage: _cameraError,
-                    isInitializing: _isInitializingCamera,
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: _showCaptureFlash ? 0.35 : 0,
-                duration: CameraMotion.captureFlash,
-                curve: CameraMotion.cameraEaseOut,
-                child: const ColoredBox(color: Colors.white),
-              ),
-            ),
-          ),
-          Positioned(
-            left: isLandscape ? null : 0,
-            right: isLandscape ? layout.bottomBarSideWidth : 0,
-            top: isLandscape ? 0 : null,
-            bottom: isLandscape ? 0 : layout.controlBarBottom,
-            width: isLandscape ? layout.controlBarSideWidth : null,
-            height: isLandscape ? null : layout.controlBarHeight,
-            child: TopCameraBar(
-              flashEnabled: _flashEnabled,
-              isRecording: _isRecording,
-              isModeBarOpen: _isModeBarOpen,
-              selectedMode: _mode,
-              onSettingsPressed: () {},
-              onModePressed: _toggleModeBar,
-              onFlashPressed: _toggleFlash,
-              isLandscape: isLandscape,
-              contentTurns: _controlTurns,
-            ),
-          ),
-          Positioned(
-            left: isLandscape ? null : 0,
-            right: isLandscape ? layout.modeBarRight : 0,
-            top: isLandscape ? 0 : null,
-            bottom: isLandscape ? 0 : layout.modeBarBottom,
-            width: isLandscape ? layout.modeBarSideWidth : null,
-            height: isLandscape ? null : layout.modeBarHeight,
-            child: ModeSwitcher(
-              selectedMode: _mode,
-              isOpen: _isModeBarOpen,
-              onModeSelected: _setMode,
-              isLandscape: isLandscape,
-              contentTurns: _controlTurns,
-            ),
-          ),
-          if (_mode == CameraMode.fisheye)
-            Positioned(
-              left: 0,
-              right: layout.overlayRight,
-              top: layout.overlayTop,
-              bottom: layout.overlayBottom,
-              child: FisheyeLensOverlay(
-                lens: _fisheyeLens,
-                onChanged: _updateFisheyeLens,
-              ),
-            ),
-          if (_mode == CameraMode.panorama)
-            Positioned(
-              left: 0,
-              right: layout.overlayRight,
-              top: layout.overlayTop,
-              bottom: layout.overlayBottom,
-              child: PanoramaGuideOverlay(
-                state: _panorama,
-                guideImage: _panoramaGuideImage,
-              ),
-            ),
-          if (_focusIndicatorPoint != null)
-            Positioned(
-              left: _focusIndicatorPoint!.dx - 32,
-              top: _focusIndicatorPoint!.dy - 32,
-              width: 64,
-              height: 64,
-              child: IgnorePointer(
-                child: _FocusIndicator(key: ValueKey(_focusIndicatorPoint)),
-              ),
-            ),
-          Positioned(
-            left: isLandscape ? null : 0,
-            right: isLandscape ? layout.secondaryControlsRight : 0,
-            top: isLandscape ? 0 : null,
-            bottom: isLandscape ? 0 : layout.secondaryControlsBottom,
-            width: isLandscape ? layout.secondaryControlsHeight : null,
-            height: isLandscape ? null : layout.secondaryControlsHeight,
-            child: Center(
-              child: AnimatedSwitcher(
-                duration: CameraMotion.controlShift,
-                switchInCurve: CameraMotion.cameraEaseOut,
-                switchOutCurve: CameraMotion.cameraEaseInOut,
-                child: _mode != CameraMode.panorama
-                    ? const SizedBox.shrink(key: ValueKey('empty-lens-space'))
-                    : AnimatedRotation(
-                        turns: isLandscape ? _controlTurns : 0,
-                        duration: CameraMotion.controlShift,
-                        curve: CameraMotion.cameraEaseInOut,
-                        child: PanoramaCaptureStrip(
-                          key: const ValueKey('panorama-strip'),
-                          state: _panorama,
-                          onReset: () => setState(_resetPanorama),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final captureFrame = _CaptureFrameSpec.fromScreen(
+            Size(constraints.maxWidth, constraints.maxHeight),
+            layout: layout,
+            isLandscape: isLandscape,
+          );
+          _captureAspectRatio =
+              captureFrame.rect.width / captureFrame.rect.height;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: Colors.black),
+              Positioned.fromRect(
+                rect: captureFrame.rect,
+                child: LayoutBuilder(
+                  builder: (context, previewConstraints) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapUp: (details) => _handlePreviewTap(
+                        details,
+                        Size(
+                          previewConstraints.maxWidth,
+                          previewConstraints.maxHeight,
                         ),
+                        captureFrame.rect.topLeft,
                       ),
+                      child: CameraPreviewView(
+                        mode: _mode,
+                        controller: _cameraService.controller,
+                        errorMessage: _cameraError,
+                        isInitializing: _isInitializingCamera,
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ),
-          Positioned(
-            left: isLandscape ? null : 0,
-            right: 0,
-            top: isLandscape ? 0 : null,
-            bottom: 0,
-            width: isLandscape ? layout.bottomBarSideWidth : null,
-            height: isLandscape ? null : layout.bottomBarHeight,
-            child: BottomCaptureBar(
-              mode: _mode,
-              isRecording: _isRecording,
-              onShutterPressed: _handleShutter,
-              onGalleryPressed: _openGallery,
-              onSwitchCameraPressed: _switchCamera,
-              lastCapture: _lastCapture,
-              isLandscape: isLandscape,
-              contentTurns: _controlTurns,
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            top: layout.processingTop,
-            child: ProcessingOverlay(
-              isVisible: _isProcessing,
-              label: _mode == CameraMode.panorama ? '파노라마를 합성하는 중' : '처리하는 중',
-            ),
-          ),
-        ],
+              Positioned.fromRect(
+                rect: captureFrame.rect,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: _showCaptureFlash ? 0.35 : 0,
+                    duration: CameraMotion.captureFlash,
+                    curve: CameraMotion.cameraEaseOut,
+                    child: const ColoredBox(color: Colors.white),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: isLandscape ? null : 0,
+                right: isLandscape ? layout.bottomBarSideWidth : 0,
+                top: isLandscape ? 0 : null,
+                bottom: isLandscape ? 0 : layout.controlBarBottom,
+                width: isLandscape ? layout.controlBarSideWidth : null,
+                height: isLandscape ? null : layout.controlBarHeight,
+                child: TopCameraBar(
+                  flashEnabled: _flashEnabled,
+                  isRecording: _isRecording,
+                  isModeBarOpen: _isModeBarOpen,
+                  selectedMode: _mode,
+                  onSettingsPressed: () {},
+                  onModePressed: _toggleModeBar,
+                  onFlashPressed: _toggleFlash,
+                  isLandscape: isLandscape,
+                  contentTurns: _controlTurns,
+                ),
+              ),
+              Positioned(
+                left: isLandscape ? null : 0,
+                right: isLandscape ? layout.modeBarRight : 0,
+                top: isLandscape ? 0 : null,
+                bottom: isLandscape ? 0 : layout.modeBarBottom,
+                width: isLandscape ? layout.modeBarSideWidth : null,
+                height: isLandscape ? null : layout.modeBarHeight,
+                child: ModeSwitcher(
+                  selectedMode: _mode,
+                  isOpen: _isModeBarOpen,
+                  onModeSelected: _setMode,
+                  isLandscape: isLandscape,
+                  contentTurns: _controlTurns,
+                ),
+              ),
+              if (_mode == CameraMode.fisheye)
+                Positioned.fromRect(
+                  rect: captureFrame.rect,
+                  child: FisheyeLensOverlay(
+                    lens: _fisheyeLens,
+                    onChanged: _updateFisheyeLens,
+                  ),
+                ),
+              if (_mode == CameraMode.panorama)
+                Positioned.fromRect(
+                  rect: captureFrame.rect,
+                  child: PanoramaGuideOverlay(
+                    state: _panorama,
+                    guideImage: _panoramaGuideImage,
+                    orientationQuarterTurns: _controlQuarterTurns,
+                  ),
+                ),
+              if (_focusIndicatorPoint != null)
+                Positioned(
+                  left: _focusIndicatorPoint!.dx - 32,
+                  top: _focusIndicatorPoint!.dy - 32,
+                  width: 64,
+                  height: 64,
+                  child: IgnorePointer(
+                    child: _FocusIndicator(key: ValueKey(_focusIndicatorPoint)),
+                  ),
+                ),
+              Positioned(
+                left: isLandscape
+                    ? null
+                    : isDeviceLandscape
+                    ? (_controlQuarterTurns == 1 ? -64 : null)
+                    : 0,
+                right: isLandscape
+                    ? layout.secondaryControlsRight
+                    : isDeviceLandscape
+                    ? (_controlQuarterTurns == 3 ? -64 : null)
+                    : 0,
+                top: isLandscape
+                    ? 0
+                    : isDeviceLandscape
+                    ? 0
+                    : null,
+                bottom: isLandscape
+                    ? 0
+                    : isDeviceLandscape
+                    ? 0
+                    : layout.secondaryControlsBottom,
+                width: isLandscape
+                    ? layout.secondaryControlsHeight
+                    : isDeviceLandscape
+                    ? 224
+                    : null,
+                height: isLandscape || isDeviceLandscape
+                    ? null
+                    : layout.secondaryControlsHeight,
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: CameraMotion.controlShift,
+                    switchInCurve: CameraMotion.cameraEaseOut,
+                    switchOutCurve: CameraMotion.cameraEaseInOut,
+                    child: _mode != CameraMode.panorama
+                        ? const SizedBox.shrink(
+                            key: ValueKey('empty-lens-space'),
+                          )
+                        : PanoramaCaptureStrip(
+                            key: const ValueKey('panorama-strip'),
+                            state: _panorama,
+                            onReset: () => setState(_resetPanorama),
+                          ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: isLandscape ? null : 0,
+                right: 0,
+                top: isLandscape ? 0 : null,
+                bottom: 0,
+                width: isLandscape ? layout.bottomBarSideWidth : null,
+                height: isLandscape ? null : layout.bottomBarHeight,
+                child: BottomCaptureBar(
+                  mode: _mode,
+                  isRecording: _isRecording,
+                  onShutterPressed: _handleShutter,
+                  onGalleryPressed: _openGallery,
+                  onSwitchCameraPressed: _switchCamera,
+                  lastCapture: _lastCapture,
+                  isLandscape: isLandscape,
+                  contentTurns: _controlTurns,
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                top: layout.processingTop,
+                child: ProcessingOverlay(
+                  isVisible: _isProcessing,
+                  label: _mode == CameraMode.panorama
+                      ? '파노라마를 합성하는 중'
+                      : '처리하는 중',
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   DeviceOrientation _captureOrientation() {
     return switch (_controlQuarterTurns) {
-      1 => DeviceOrientation.landscapeLeft,
+      1 => DeviceOrientation.landscapeRight,
       2 => DeviceOrientation.portraitDown,
-      3 => DeviceOrientation.landscapeRight,
+      3 => DeviceOrientation.landscapeLeft,
       _ => DeviceOrientation.portraitUp,
     };
+  }
+
+  double _captureCropAspectRatio() {
+    if (_controlQuarterTurns == 1 || _controlQuarterTurns == 3) {
+      return 1 / _captureAspectRatio;
+    }
+    return _captureAspectRatio;
   }
 }
 
@@ -676,6 +730,47 @@ class _FocusIndicator extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _CaptureFrameSpec {
+  const _CaptureFrameSpec({required this.rect});
+
+  final Rect rect;
+
+  static _CaptureFrameSpec fromScreen(
+    Size screenSize, {
+    required _CameraLayoutSpec layout,
+    required bool isLandscape,
+  }) {
+    const landscapeRatio = 4 / 3;
+
+    if (isLandscape) {
+      final maxWidth =
+          screenSize.width -
+          layout.bottomBarSideWidth -
+          layout.controlBarSideWidth;
+      final availableWidth = math.max(0.0, maxWidth);
+      var height = screenSize.height;
+      var width = height * landscapeRatio;
+      if (width > availableWidth) {
+        width = availableWidth;
+        height = width / landscapeRatio;
+      }
+      return _CaptureFrameSpec(
+        rect: Rect.fromLTWH(0, (screenSize.height - height) / 2, width, height),
+      );
+    }
+
+    final frameTop = layout.overlayTop;
+    const frameBottomGap = 0.0;
+    final lowerControlTop =
+        screenSize.height - layout.controlBarBottom - layout.controlBarHeight;
+    final frameBottom = lowerControlTop - frameBottomGap;
+    final availableHeight = math.max(1.0, frameBottom - frameTop);
+    return _CaptureFrameSpec(
+      rect: Rect.fromLTWH(0, frameTop, screenSize.width, availableHeight),
     );
   }
 }
