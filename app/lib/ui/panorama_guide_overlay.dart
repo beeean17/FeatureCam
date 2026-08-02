@@ -98,7 +98,10 @@ class _LandscapeGuideLayer extends StatelessWidget {
           child: AnimatedOpacity(
             duration: CameraMotion.panoramaGuide,
             opacity: state.guideVisible ? 1 : 0,
-            child: _LandscapePreviousFrameGuide(image: guideImage),
+            child: _LandscapePreviousFrameGuide(
+              image: guideImage,
+              imageQuarterTurns: _guideImageQuarterTurns,
+            ),
           ),
         ),
         if (state.guideVisible)
@@ -117,12 +120,24 @@ class _LandscapeGuideLayer extends StatelessWidget {
       ],
     );
   }
+
+  int get _guideImageQuarterTurns {
+    return switch (quarterTurns) {
+      1 => 1,
+      3 => 3,
+      _ => 0,
+    };
+  }
 }
 
 class _LandscapePreviousFrameGuide extends StatelessWidget {
-  const _LandscapePreviousFrameGuide({required this.image});
+  const _LandscapePreviousFrameGuide({
+    required this.image,
+    required this.imageQuarterTurns,
+  });
 
   final File? image;
+  final int imageQuarterTurns;
 
   @override
   Widget build(BuildContext context) {
@@ -133,11 +148,14 @@ class _LandscapePreviousFrameGuide extends StatelessWidget {
           ClipRect(
             child: Opacity(
               opacity: 0.48,
-              child: Image.file(
-                image!,
-                fit: BoxFit.cover,
-                alignment: Alignment.centerRight,
-                gaplessPlayback: true,
+              child: RotatedBox(
+                quarterTurns: imageQuarterTurns % 4,
+                child: Image.file(
+                  image!,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.centerRight,
+                  gaplessPlayback: true,
+                ),
               ),
             ),
           )
@@ -158,49 +176,54 @@ class PanoramaCaptureStrip extends StatelessWidget {
     super.key,
     required this.state,
     required this.onReset,
+    this.quarterTurns = 0,
   });
 
   final PanoramaCaptureState state;
   final VoidCallback onReset;
+  final int quarterTurns;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: FeatureCamColors.surface.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: FeatureCamColors.strokeSubtle),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var i = 0; i < 3; i++) ...[
-                  _PanoramaSlot(
-                    index: i,
-                    isFilled: i < state.capturedCount,
-                    isCurrent: i == state.capturedCount && !state.isComplete,
-                  ),
-                  if (i != 2) const SizedBox(width: 8),
-                ],
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: onReset,
-                  child: const SizedBox.square(
-                    dimension: 34,
-                    child: Icon(
-                      Icons.refresh_rounded,
-                      color: FeatureCamColors.white,
-                      size: 20,
+    return RotatedBox(
+      quarterTurns: quarterTurns % 4,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: FeatureCamColors.surface.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: FeatureCamColors.strokeSubtle),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < 3; i++) ...[
+                    _PanoramaSlot(
+                      index: i,
+                      isFilled: i < state.capturedCount,
+                      isCurrent: i == state.capturedCount && !state.isComplete,
+                    ),
+                    if (i != 2) const SizedBox(width: 8),
+                  ],
+                  const SizedBox(width: 12),
+                  GestureDetector(
+                    onTap: onReset,
+                    child: const SizedBox.square(
+                      dimension: 34,
+                      child: Icon(
+                        Icons.refresh_rounded,
+                        color: FeatureCamColors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

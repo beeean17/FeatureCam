@@ -120,6 +120,11 @@ class MainActivity : FlutterActivity() {
                         inputPath = call.requiredString("inputPath"),
                         outputPath = call.requiredString("outputPath"),
                         aspectRatio = call.requiredDouble("aspectRatio"),
+                        applyExifOrientation = call.optionalBoolean(
+                            "applyExifOrientation",
+                            true,
+                        ),
+                        extraRotationDegrees = call.optionalInt("extraRotationDegrees", 0),
                     )
                 }
                 else -> result.notImplemented()
@@ -367,13 +372,20 @@ class MainActivity : FlutterActivity() {
         inputPath: String,
         outputPath: String,
         aspectRatio: Double,
+        applyExifOrientation: Boolean,
+        extraRotationDegrees: Int,
     ): String {
         val source = File(inputPath)
         require(source.exists()) { "Source image does not exist: $inputPath" }
 
         val decoded = BitmapFactory.decodeFile(inputPath)
             ?: throw IllegalStateException("Could not decode image: $inputPath")
-        val bitmap = decoded.applyExifOrientation(inputPath)
+        val orientedBitmap = if (applyExifOrientation) {
+            decoded.applyExifOrientation(inputPath)
+        } else {
+            decoded
+        }
+        val bitmap = orientedBitmap.rotateDegrees(extraRotationDegrees)
         val targetRatio = aspectRatio.coerceAtLeast(0.01)
         val sourceRatio = bitmap.width.toDouble() / bitmap.height.toDouble()
 
@@ -398,13 +410,27 @@ class MainActivity : FlutterActivity() {
         if (cropped != bitmap) {
             cropped.recycle()
         }
-        if (bitmap != decoded) {
+        if (bitmap != orientedBitmap) {
             bitmap.recycle()
+        }
+        if (orientedBitmap != decoded) {
+            orientedBitmap.recycle()
         }
         if (!decoded.isRecycled) {
             decoded.recycle()
         }
         return outputPath
+    }
+
+    private fun Bitmap.rotateDegrees(degrees: Int): Bitmap {
+        val normalizedDegrees = ((degrees % 360) + 360) % 360
+        if (normalizedDegrees == 0) {
+            return this
+        }
+        val matrix = Matrix().apply {
+            postRotate(normalizedDegrees.toFloat())
+        }
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
 
     private fun Bitmap.applyExifOrientation(path: String): Bitmap {
@@ -548,6 +574,21 @@ class MainActivity : FlutterActivity() {
             is Int -> value.toDouble()
             is Long -> value.toDouble()
             else -> throw IllegalArgumentException("$key must be a number")
+        }
+    }
+
+    private fun MethodCall.optionalBoolean(key: String, fallback: Boolean): Boolean {
+        return argument<Boolean>(key) ?: fallback
+    }
+
+    private fun MethodCall.optionalInt(key: String, fallback: Int): Int {
+        return when (val value = argument<Any>(key)) {
+            is Int -> value
+            is Long -> value.toInt()
+            is Double -> value.toInt()
+            is Float -> value.toInt()
+            null -> fallback
+            else -> fallback
         }
     }
 

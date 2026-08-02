@@ -187,6 +187,7 @@ class _CameraScreenState extends State<CameraScreen> {
         kind: 'photo',
         cropToCaptureFrame: true,
         cropAspectRatio: _captureCropAspectRatio(),
+        applyExifOrientation: false,
       );
       _setLastCapture(output, '사진 저장됨');
     } catch (error) {
@@ -298,6 +299,7 @@ class _CameraScreenState extends State<CameraScreen> {
         kind: 'photo',
         cropToCaptureFrame: true,
         cropAspectRatio: _captureCropAspectRatio(),
+        extraRotationDegrees: _panoramaStorageRotationDegrees(),
       );
       _panoramaFiles.add(original);
 
@@ -637,6 +639,9 @@ class _CameraScreenState extends State<CameraScreen> {
                             key: const ValueKey('panorama-strip'),
                             state: _panorama,
                             onReset: () => setState(_resetPanorama),
+                            quarterTurns: isDeviceLandscape
+                                ? _controlQuarterTurns
+                                : 0,
                           ),
                   ),
                 ),
@@ -691,6 +696,14 @@ class _CameraScreenState extends State<CameraScreen> {
       return 1 / _captureAspectRatio;
     }
     return _captureAspectRatio;
+  }
+
+  int _panoramaStorageRotationDegrees() {
+    return switch (_controlQuarterTurns) {
+      1 => -90,
+      3 => 90,
+      _ => 0,
+    };
   }
 }
 

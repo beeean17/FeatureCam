@@ -18,6 +18,8 @@ class CaptureStore {
     bool exportToDcim = true,
     bool cropToCaptureFrame = false,
     double cropAspectRatio = 3 / 4,
+    bool applyExifOrientation = true,
+    int extraRotationDegrees = 0,
   }) async {
     final extension = _extensionFor(
       source.path,
@@ -35,6 +37,8 @@ class CaptureStore {
             source.path,
             output.path,
             aspectRatio: cropAspectRatio,
+            applyExifOrientation: applyExifOrientation,
+            extraRotationDegrees: extraRotationDegrees,
           )
         : await File(source.path).copy(output.path);
     if (exportToDcim) {
@@ -147,11 +151,15 @@ class CaptureStore {
     String inputPath,
     String outputPath, {
     required double aspectRatio,
+    required bool applyExifOrientation,
+    required int extraRotationDegrees,
   }) async {
     await _mediaStoreChannel.invokeMethod<String>('cropImageToAspect', {
       'inputPath': inputPath,
       'outputPath': outputPath,
       'aspectRatio': aspectRatio,
+      'applyExifOrientation': applyExifOrientation,
+      'extraRotationDegrees': extraRotationDegrees,
     });
     return File(outputPath);
   }
